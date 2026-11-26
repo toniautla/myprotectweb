@@ -1,6 +1,7 @@
 import { Message, PermissionFlagsBits } from "discord.js"
 import { collections } from "../database"
 import { isModuleEnabled } from "../lib/modules"
+import { isKnownPhish } from "../lib/phishingList"
 
 /** Domains that are almost always Discord/Steam scam/phishing fronts. */
 const DEFAULT_BLOCKLIST = [
@@ -52,7 +53,9 @@ export async function handleAntiPhishing(message: Message): Promise<void> {
     if (!domains.length) return
 
     const blocklist = [...DEFAULT_BLOCKLIST, ...(await getCustomDomains(message.guildId))]
-    const hitDomain = domains.some((d) => blocklist.some((b) => d.includes(b)))
+    const hitDomain = domains.some(
+        (d) => isKnownPhish(d) || blocklist.some((b) => d.includes(b))
+    )
     const hitHint = SCAM_HINTS.some((r) => r.test(message.content))
 
     if (hitDomain || hitHint) {

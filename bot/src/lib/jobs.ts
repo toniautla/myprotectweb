@@ -23,7 +23,9 @@ export async function processJobs(client: Client): Promise<void> {
     ) {
         try {
             await runJob(client, job)
+            console.log(`[jobs] ran ${job.type} for guild ${job.guildId} → ok`)
         } catch (err) {
+            console.error(`[jobs] ${job.type} for guild ${job.guildId} failed:`, String(err))
             await collections
                 .jobs()
                 .updateOne(

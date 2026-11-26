@@ -14,6 +14,7 @@ import { errorEmbed } from "./lib/embeds"
 import { syncGuild, removeGuild } from "./lib/guildSync"
 import { logEvent } from "./lib/logging"
 import { processJobs } from "./lib/jobs"
+import { startPhishingList } from "./lib/phishingList"
 import { handleAntiPhishing } from "./modules/antiphishing"
 import { handleContentProtect } from "./modules/contentprotect"
 import { handleAntiRaid } from "./modules/antiraid"
@@ -42,6 +43,9 @@ client.once(Events.ClientReady, async (c) => {
 
     // Poll for dashboard-triggered jobs (publish rules / verification panel).
     setInterval(() => processJobs(c).catch((e) => console.error("[jobs]", e)), 5000)
+
+    // Keep the live phishing-domain list fresh.
+    startPhishingList()
 })
 
 // ── Slash commands & component interactions ──────────────────────────────
