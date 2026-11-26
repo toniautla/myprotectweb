@@ -1,6 +1,8 @@
 import { Box, Button, ButtonGroup, Flex, Heading, Icon, Image, Text } from "@chakra-ui/react";
 import { FaBan, FaBomb, FaBrain, FaList, FaMoneyBill, FaShieldAlt } from "react-icons/fa";
+import { useRouter } from "next/router";
 import BaseLayout from "../components/BaseLayout";
+import { botInviteUrl } from "../lib/publicConfig";
 
 const StarterCard = ({ icon, title, color, children, ...rest }) => {
 
@@ -34,7 +36,7 @@ const StarterCard = ({ icon, title, color, children, ...rest }) => {
 
 const FeatureBox = ({ title, isRight, image, children, icon, ...rest }) => {
   return (
-    <Flex mt="5vw" justifyContent="space-between" alignItems="center" maxW="100vw" mb={5} _hover={{
+    <Flex mt="5vw" direction={{ base: "column", md: "row" }} justifyContent="space-between" alignItems="center" maxW="100vw" mb={5} _hover={{
       transform: "scale(1.01)"
     }} >
       {!isRight && (
@@ -71,35 +73,38 @@ const FeatureBox = ({ title, isRight, image, children, icon, ...rest }) => {
 }
 
 export default function Index({ }) {
+  const router = useRouter()
   return (
     <BaseLayout pageTitle={"Home"}>
-      <Flex justifyContent="space-around" alignItems={"center"} m={20}>
+      <Flex direction={{ base: "column-reverse", md: "row" }} justifyContent="space-around" alignItems={"center"} m={{ base: 8, md: 20 }} gap={8}>
         <Box>
-          <Heading fontSize="5vw">Meet MyProtect</Heading>
-          <Text my={6} fontSize="1.5vw" maxW="40ch" color="gray">Meet tProtect, the most advanced and easy to use bot to help protect your Discord Server.</Text>
-          <ButtonGroup spacing={7}>
+          <Heading fontSize={{ base: "4xl", md: "5vw" }}>Meet MyProtect</Heading>
+          <Text my={6} fontSize={{ base: "md", md: "1.5vw" }} maxW="40ch" color="gray">The most advanced and easy to use bot to help protect your Discord server.</Text>
+          <ButtonGroup spacing={5} flexWrap="wrap">
             <Button
               colorScheme="brand.blue"
-              fontSize="1.1vw"
-              width="13vw"
-              height="4vw"
+              fontSize={{ base: "md", md: "1.1vw" }}
+              px={8}
+              py={{ base: 6, md: "2vw" }}
               borderRadius="20px"
+              onClick={() => window.open(botInviteUrl(), "_blank", "noopener")}
             >
               Add MyProtect
             </Button>
 
             <Button
               colorScheme="green"
-              fontSize="1.1vw"
-              width="13vw"
-              height="4vw"
+              fontSize={{ base: "md", md: "1.1vw" }}
+              px={8}
+              py={{ base: 6, md: "2vw" }}
               borderRadius="20px"
+              onClick={() => router.push("/dashboard")}
             >
-              Join our Community
+              Open Dashboard
             </Button>
           </ButtonGroup>
         </Box>
-        <Image alt="Image 1" src="/brand/image1.png" width="40%" />
+        <Image alt="Image 1" src="/brand/image1.png" width={{ base: "70%", md: "40%" }} />
       </Flex>
 
       <Flex justifyContent="center" gap={"5vw"} alignItems="center">
@@ -109,7 +114,7 @@ export default function Index({ }) {
         </StarterCard>
 
         <StarterCard icon="lightBulb" title="Intelligent" color="rgb(148, 92, 246)" w="2vw">
-          MyProtect uses AI to identify your server rules and automatically enforece them.**
+          MyProtect uses AI to identify your server rules and automatically enforce them.
         </StarterCard>
 
         <StarterCard icon="speedometer" title="Reliable" color="rgb(88, 192, 152)" w="3.5vw">
@@ -127,7 +132,7 @@ export default function Index({ }) {
       </FeatureBox>
 
       <FeatureBox icon={FaMoneyBill} title={"No more free nitro scams"} image={"image4"}>
-        With the power of AI, MyProtect is reliable at identifying phishing links! Once detected, tProtect automatically deletes them.
+        With the power of AI, MyProtect is reliable at identifying phishing links! Once detected, MyProtect automatically deletes them.
       </FeatureBox>
 
       <FeatureBox icon={FaBrain} title={"Powered by Intelligence"} image={"image5"}>

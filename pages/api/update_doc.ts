@@ -1,25 +1,19 @@
-import { NextApiRequest, NextApiResponse } from "next";
-import Config from "../../config.json"
-import { FetchGuildDoc, UpdateGuildDoc } from "../../lib/DbUtils";
-import { Modules } from "../../lib/Modules";
+import { NextApiRequest, NextApiResponse } from "next"
+import { authorizeGuild } from "../../lib/auth"
+import { UpdateGuildDoc, isAllowedCollection } from "../../lib/DbUtils"
 
-export default async function GetAll(req: NextApiRequest, res : NextApiResponse) {
-    
-    if (req.method == "POST") {
-        const { key, ...data } = JSON.parse(req.body)
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+    if (req.method !== "POST") return res.status(405).json({ message: "Method not allowed" })
 
-        if (key !== Config.clientSecret) return res.status(403).json("Forbidden")
+    const { guild, collection, ...rest } = req.body || {}
 
-        const { guild, collection , ...rest } = data
-        
-        await UpdateGuildDoc(guild, collection, rest)
+    const auth = await authorizeGuild(req, res, guild)
+    if (!auth.ok) return res.status(auth.status).json({ message: auth.message })
 
-        return res.json({
-            message: "Success"
-        })
-
-    } else {
-        return res.status(405).json("Method not allowed")
+    if (!isAllowedCollection(collection)) {
+        return res.status(400).json({ message: "Invalid collection" })
     }
 
+    await UpdateGuildDoc(guild, collection, rest)
+    return res.json({ message: "Success" })
 }

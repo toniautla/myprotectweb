@@ -1,43 +1,65 @@
-import type { AppProps } from 'next/app'
-import { ChakraProvider, Image } from '@chakra-ui/react'
-import { Flex } from '@chakra-ui/layout'
-import theme from '../styles/theme'
+import type { AppProps } from "next/app"
+import { ChakraProvider, Image } from "@chakra-ui/react"
+import { Flex } from "@chakra-ui/layout"
+import { SessionProvider } from "next-auth/react"
 import Router from "next/router"
 import Head from "next/head"
-import { useEffect, useState } from 'react'
-import { ThemeProvider } from '@mui/material'
-import muiTheme from '../styles/mui'
+import { useEffect, useState } from "react"
+import { ThemeProvider } from "@mui/material"
+import theme from "../styles/theme"
+import muiTheme from "../styles/mui"
 
 import "../styles/majorClasses.css"
 
 function MyApp({ Component, pageProps }: AppProps) {
+    const [isLoading, setLoading] = useState(false)
 
-  const [isLoading, setLoading] = useState(false)
+    // Register route-change listeners once (previously re-added on every render).
+    useEffect(() => {
+        const start = () => setLoading(true)
+        const done = () => setLoading(false)
 
-  Router.events.on('routeChangeStart', (url) => {
-    setLoading(true)
-  })
+        Router.events.on("routeChangeStart", start)
+        Router.events.on("routeChangeComplete", done)
+        Router.events.on("routeChangeError", done)
 
-  Router.events.on('routeChangeComplete', (url) => {
-    setLoading(false)
-  })
+        return () => {
+            Router.events.off("routeChangeStart", start)
+            Router.events.off("routeChangeComplete", done)
+            Router.events.off("routeChangeError", done)
+        }
+    }, [])
 
-  return (
-    <ThemeProvider theme={muiTheme}>
-      <ChakraProvider resetCSS theme={theme}>
-        <Head>
-          <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons" />
-          <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/nprogress/0.2.0/nprogress.min.css" integrity="sha512-42kB9yDlYiCEfx2xVwq0q7hT4uf26FUgSIZBK8uiaEnTdShXjwr8Ip1V4xGJMg3mHkUt9nNuTDxunHF0/EgxLQ==" crossOrigin="anonymous" referrerPolicy="no-referrer" />
-        </Head>
-        {isLoading && (
-          <Image alt="loading" src="/loading.svg" boxSize="50px" position="fixed" bottom="10px" right="10px" draggable="false" />
-        )}
-        <Flex flexDirection="column" minH="100vh">
-          <Component {...pageProps} />
-        </Flex>
-      </ChakraProvider>
-    </ThemeProvider>
-  )
+    return (
+        <SessionProvider session={(pageProps as any).session}>
+            <ThemeProvider theme={muiTheme}>
+                <ChakraProvider resetCSS theme={theme}>
+                    <Head>
+                        <meta name="viewport" content="width=device-width, initial-scale=1" />
+                        <link
+                            rel="stylesheet"
+                            href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap"
+                        />
+                    </Head>
+                    {isLoading && (
+                        <Image
+                            alt="loading"
+                            src="/loading.svg"
+                            boxSize="50px"
+                            position="fixed"
+                            bottom="10px"
+                            right="10px"
+                            draggable={false}
+                            zIndex={2000}
+                        />
+                    )}
+                    <Flex flexDirection="column" minH="100vh">
+                        <Component {...pageProps} />
+                    </Flex>
+                </ChakraProvider>
+            </ThemeProvider>
+        </SessionProvider>
+    )
 }
 
 export default MyApp

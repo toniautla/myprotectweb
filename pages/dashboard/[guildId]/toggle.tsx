@@ -1,120 +1,101 @@
-import { Box, Button, Flex, Icon, Text } from "@chakra-ui/react"
-import { getSession } from "next-auth/client"
+import { Flex, Heading, Icon, Switch, Text, useToast } from "@chakra-ui/react"
+import { useState } from "react"
 import BaseLayout from "../../../components/BaseLayout"
-import { FetchBotGuilds } from "../../../lib/DbUtils"
-import Config from "../../../config.json"
+import InviteScreen from "../../../components/InviteScreen"
+import { loadGuildContext } from "../../../lib/guildProps"
 import { Modules } from "../../../lib/Modules"
 import { FaCheck, FaChessRook, FaDatabase, FaFish, FaHammer, FaHandPaper, FaMailBulk } from "react-icons/fa"
-import Switch from "react-switch"
 import api from "../../../lib/api"
-import { useState } from "react"
 
-export default function GuildDashboard({ session, guild, moduleSettings }) {
+const MODULES = [
+    { module: "Moderation", name: "Moderation", icon: FaHammer },
+    { module: "Rules", name: "Rules", icon: FaCheck },
+    { module: "Backups", name: "Backups", icon: FaDatabase },
+    { module: "AntiRaid", name: "Anti Raid", icon: FaHandPaper },
+    { module: "AntiPhishing", name: "Anti Phishing", icon: FaFish },
+    { module: "Webhooks", name: "Webhook Protection", icon: FaChessRook },
+    { module: "ContentProtect", name: "Special Channels", icon: FaMailBulk },
+]
 
-    const ModuleBox = ({ moduleName, module, modStatus, icon }) => {
-
-        const [status, setStatus] = useState(modStatus)
-    
-        return (
-            <Flex
-                p={5}
-                bg="gray.800"
-                rounded="md"
-                w="25vw"
-                position="relative"
-                overflow="hidden"
-                direction="column"
-            >
-                <Icon as={icon} position="absolute" fontSize="8vw" top="-15px" right="10px" opacity={.3} />
-                
-                <Flex alignItems="center" justifyContent="space-between" wrap="wrap">
-                    <Text fontSize="1.5vw">{moduleName || module}</Text>
-    
-                    <Switch checked={status} onChange={async() => {
-                        const newStatus = await api("/modules/toggle", "POST", {
-                            guild: guild._id,
-                            module: module
-                        })
-
-                        setStatus(newStatus.status)
-                    }} />
-                </Flex>
-            </Flex>
-        )
-    }
+function ModuleBox({ guildId, module, name, icon, initial }) {
+    const [status, setStatus] = useState<boolean>(initial)
+    const [busy, setBusy] = useState(false)
+    const toast = useToast({ isClosable: true, variant: "solid", position: "bottom-right" })
 
     return (
-        <>
-            {!guild && (
-                <BaseLayout pageTitle={"Bot not in Guild"}>
-                    <Flex alignItems="center" justifyContent="center" direction="column">
-                        <Text fontSize="2.5vw" textAlign="center">{"To access this guild's Dashboard, you must invite it in the server!"}</Text>
-                        <Button
-                            colorScheme="brand.blue"
-                            onClick={() => window.open(`https://discord.com/api/oauth2/authorize?client_id=${Config.clientId}&permissions=8&scope=bot%20applications.commands`)}
-                            h="60px"
-                            w="200px"
-                            m={2}
-                        >
-                            Invite Bot
-                        </Button>
-                    </Flex>
-                </BaseLayout>
-            )}
-            {guild && (
-                <BaseLayout pageTitle={guild.name} navGuild={guild}>
-                    <Flex p={5} justifyContent="center" gap={10} wrap="wrap">
-                        <ModuleBox module="Moderation" icon={FaHammer} modStatus={"Moderation" in moduleSettings ? moduleSettings.Moderation.enabled : true} />
-                        <ModuleBox module="Rules" icon={FaCheck} modStatus={"Rules" in moduleSettings ? moduleSettings.Rules.enabled : true} />
-                        <ModuleBox module="Backups" icon={FaDatabase} modStatus={"Backups" in moduleSettings ? moduleSettings.Backups.enabled : true} />
-                        <ModuleBox moduleName="Anti Raid" module="AntiRaid" icon={FaHandPaper} modStatus={"AntiRaid" in moduleSettings ? moduleSettings.AntiRaid.enabled : true} />
-                        <ModuleBox moduleName="Anti Phishing" module="AntiPhishing" icon={FaFish} modStatus={"AntiPhishing" in moduleSettings ? moduleSettings.AntiPhishing.enabled : true} />
-                        <ModuleBox moduleName="Webhook Protection" module="Webhooks" icon={FaChessRook} modStatus={"Webhooks" in moduleSettings ? moduleSettings.Webhooks.enabled : true} />
-                        <ModuleBox moduleName="Special Channels" module="ContentProtect" icon={FaMailBulk} modStatus={"ContentProtect" in moduleSettings ? moduleSettings.ContentProtect.enabled : true} />
-                    </Flex>
-                </BaseLayout>
-            )}
-        </>
+        <Flex
+            p={6}
+            bg="gray.800"
+            rounded="xl"
+            w={{ base: "100%", sm: "280px" }}
+            position="relative"
+            overflow="hidden"
+            direction="column"
+            border="1px solid"
+            borderColor="whiteAlpha.100"
+        >
+            <Icon as={icon} position="absolute" fontSize="7rem" top="-20px" right="-10px" opacity={0.08} />
+            <Flex alignItems="center" justifyContent="space-between" gap={3}>
+                <Text fontSize="xl" fontWeight="semibold">
+                    {name}
+                </Text>
+                <Switch
+                    size="lg"
+                    isChecked={status}
+                    isDisabled={busy}
+                    colorScheme="green"
+                    onChange={async () => {
+                        setBusy(true)
+                        const previous = status
+                        try {
+                            const res = await api("/modules/toggle", "POST", { guild: guildId, module })
+                            setStatus(res.status)
+                        } catch (e: any) {
+                            setStatus(previous)
+                            toast({ status: "error", title: "Failed", description: e.message })
+                        } finally {
+                            setBusy(false)
+                        }
+                    }}
+                />
+            </Flex>
+        </Flex>
+    )
+}
+
+export default function TogglePage({ guild, moduleSettings }) {
+    if (!guild) return <InviteScreen />
+
+    const isEnabled = (module: string) =>
+        module in moduleSettings ? moduleSettings[module].enabled !== false : true
+
+    return (
+        <BaseLayout pageTitle={guild.name} navGuild={guild}>
+            <Flex direction="column" alignItems="center" px={6} mb={6}>
+                <Heading fontSize={{ base: "2xl", md: "3xl" }}>Toggle Modules</Heading>
+                <Text color="gray.400" mt={1}>
+                    Turn MyProtect features on or off for {guild.name}.
+                </Text>
+            </Flex>
+            <Flex p={5} justifyContent="center" gap={6} wrap="wrap" maxW="1100px" mx="auto">
+                {MODULES.map((m) => (
+                    <ModuleBox key={m.module} guildId={guild._id} {...m} initial={isEnabled(m.module)} />
+                ))}
+            </Flex>
+        </BaseLayout>
     )
 }
 
 export const getServerSideProps = async (ctx) => {
+    const ctxResult = await loadGuildContext(ctx)
+    if ("redirect" in ctxResult) return ctxResult
 
-    const session = await getSession(ctx)
-    const { guildId } = ctx.query
-    let userGuild
+    const { session, guild } = ctxResult
 
-    if (session) userGuild = session.guilds.find(g => g.id == guildId)
-
-    if (!session || !userGuild) return {
-        redirect: {
-            destination: "/login",
-            permanent: false
-        }
-    }
-
-    const botGuilds = await FetchBotGuilds()
-
-    let guild = botGuilds.find(g => g._id == guildId) || null
-
+    let moduleSettings = {}
     if (guild) {
-        guild = {
-            ...guild,
-            roles: guild.roles.map(role => ({
-                ...role,
-                permissions: role.permissions.toString()
-            }))
-        }
+        moduleSettings = JSON.parse(JSON.stringify(await new Modules(guild._id).get()))
     }
 
-    const module = new Modules(guild._id)
-    const moduleSettings = await module.get()
-
-    return {
-        props: {
-            session,
-            guild: guild || null,
-            moduleSettings
-        }
-    }
+    return { props: { session, guild, moduleSettings } }
 }

@@ -1,34 +1,139 @@
-This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# MyProtect
 
-## Getting Started
+A Discord server-protection bot **and** its web dashboard, sharing a single
+MongoDB. Configure everything from the web dashboard and it applies to the bot
+instantly — and vice-versa.
 
-First, run the development server:
-
-```bash
-npm run dev
-# or
-yarn dev
+```
+myprotectweb/
+├── pages/ components/ lib/ styles/   # Next.js dashboard (this folder)
+└── bot/                              # discord.js v14 bot (TypeScript)
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## How the two sides "cross over"
 
-You can start editing the page by modifying `pages/index.tsx`. The page auto-updates as you edit the file.
+The bot and the dashboard never talk to each other directly — they share
+collections in MongoDB:
 
-[API routes](https://nextjs.org/docs/api-routes/introduction) can be accessed on [http://localhost:3000/api/hello](http://localhost:3000/api/hello). This endpoint can be edited in `pages/api/hello.ts`.
+| Collection              | Written by | Read by   | Purpose                                   |
+| ----------------------- | ---------- | --------- | ----------------------------------------- |
+| `botCache.guildCache`   | **Bot**    | Dashboard | Guild name, icon, channels, roles, counts |
+| `Bot.modules`           | Both       | Both      | Which modules are enabled per guild       |
+| `Bot.rules`             | Dashboard  | **Bot**   | The configurable rules embed              |
+| `Bot.channels`          | Dashboard  | **Bot**   | Filtered ("special") channels             |
+| `Bot.phishing_links`    | Dashboard  | **Bot**   | Optional custom phishing domains          |
+| `Bot.backups`           | Bot        | Bot       | Server backups                            |
+| `Bot.warnings`          | Bot        | Bot       | Moderation warnings                       |
 
-The `pages/api` directory is mapped to `/api/*`. Files in this directory are treated as [API routes](https://nextjs.org/docs/api-routes/introduction) instead of React pages.
+So: toggle a module on the dashboard → the bot stops/starts enforcing it. Edit
+the rules on the dashboard → `/rules post` publishes them. Toggle a module with
+`/modules` in Discord → the dashboard reflects it on refresh.
 
-## Learn More
+---
 
-To learn more about Next.js, take a look at the following resources:
+## 1. Prerequisites
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- Node.js 18+ (tested on Node 22)
+- A MongoDB instance (local or Atlas) — **the same URI for both apps**
+- A Discord application: <https://discord.com/developers/applications>
+  - **OAuth2** → copy the *Client ID* and *Client Secret*
+  - **OAuth2 → Redirects** → add `http://localhost:3000/api/auth/callback/discord`
+  - **Bot** → create a bot, copy the *token*
+  - **Bot → Privileged Gateway Intents** → enable **Server Members Intent** and
+    **Message Content Intent** (used by Anti-Raid, Anti-Phishing and the channel
+    filter)
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js/) - your feedback and contributions are welcome!
+---
 
-## Deploy on Vercel
+## 2. The dashboard (web)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+cp .env.example .env.local      # then fill in the values
+npm install --legacy-peer-deps  # Chakra v1 needs legacy peer resolution
+npm run dev                     # http://localhost:3000
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/deployment) for more details.
+`.env.local` values are documented in [`.env.example`](.env.example). In short:
+`MONGO_URI`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `NEXTAUTH_SECRET`,
+`NEXTAUTH_URL`, and the public `NEXT_PUBLIC_DISCORD_CLIENT_ID`.
+
+Production:
+
+```bash
+npm run build && npm run start
+```
+
+### What changed from the original
+
+- **Secrets** moved out of the committed `config.json` into environment
+  variables (`lib/config.ts`).
+- **Auth** upgraded from the unmaintained `next-auth@3.29` to **next-auth v4**
+  (`pages/api/auth/[...nextauth].tsx`), with a clean Discord login.
+- **Security**: the old model shipped the Discord *client secret* to the
+  browser and used it as an API key. API routes now authenticate with the
+  NextAuth **session** and verify the user actually manages the target guild
+  (`lib/auth.ts`), and only an allow-list of collections can be written.
+- **Reliability**: lazy MongoDB connection (no more build-time crash), fixed
+  `Modules`/`Cache`/`DbUtils` logic bugs, null-guild handling, and a
+  deduplicated guild-loading helper (`lib/guildProps.ts`).
+- **UI**: kept the Chakra design system; made the landing/hero/feature rows
+  responsive, fixed copy, added proper empty/error states and a cohesive
+  toggle/setup experience.
+
+---
+
+## 3. The bot
+
+```bash
+cd bot
+cp .env.example .env            # then fill in the values
+npm install
+npm run deploy                  # register slash commands (set DEV_GUILD_ID for instant updates)
+npm run dev                     # start with hot-reload (tsx)
+```
+
+Production:
+
+```bash
+cd bot
+npm run build && npm run start
+```
+
+### Slash commands
+
+| Command           | Module        | Discord UI used                     |
+| ----------------- | ------------- | ----------------------------------- |
+| `/dashboard`      | —             | Embed + link buttons                |
+| `/modules`        | —             | Embed + **toggle buttons**          |
+| `/setup`          | —             | Embed + **multi-select dropdown**   |
+| `/rules post`     | Rules         | Builds the configured embed+buttons |
+| `/rules preview`  | Rules         | Ephemeral embed                     |
+| `/rules edit`     | Rules         | **Modal** (title/description/colour)|
+| `/ban`            | Moderation    | Embed + **confirm/cancel buttons**  |
+| `/kick`           | Moderation    | Embed                               |
+| `/purge`          | Moderation    | Embed                               |
+| `/warn add/list`  | Moderation    | Embeds + stored warnings            |
+| `/backup create`  | Backups       | Embed                               |
+| `/backup list`    | Backups       | **Dropdown** + confirm buttons      |
+
+### Passive modules (event-driven, gated by the toggle)
+
+- **AntiPhishing** — deletes scam/phishing links (default blocklist + custom
+  domains from `Bot.phishing_links`).
+- **ContentProtect** — enforces the dashboard's filtered channels (media-only,
+  links-only, YouTube-only).
+- **AntiRaid** — sliding-window join-burst detection; kicks new accounts during
+  a raid.
+- **Webhooks** — removes webhooks created by non-admins (a common raid vector).
+
+A module counts as **enabled** when it is missing from `Bot.modules` or has
+`enabled !== false` — identical logic on both sides.
+
+---
+
+## 4. Inviting the bot
+
+The dashboard's "Invite Bot" buttons build an OAuth2 URL from
+`NEXT_PUBLIC_DISCORD_CLIENT_ID` with the `bot applications.commands` scopes.
+Adjust `NEXT_PUBLIC_DISCORD_INVITE_PERMISSIONS` (default `8` = Administrator;
+lower it for least-privilege once you know which permissions you need).

@@ -1,6 +1,21 @@
 import { MongoClient } from "mongodb"
 import Database from "./Database"
 
+export interface ModuleState {
+    enabled: boolean
+    [key: string]: unknown
+}
+
+export interface ModulesDoc {
+    _id: string
+    [module: string]: ModuleState | string
+}
+
+/**
+ * Per-guild module configuration, stored in `Bot.modules`. This is shared with
+ * the Discord bot: the bot reads the same document to decide which features are
+ * active, and both sides toggle modules through it.
+ */
 export class Modules {
     public guildId: string
 
@@ -8,69 +23,54 @@ export class Modules {
         this.guildId = guildId
     }
 
-    public async get() {
-        return await Database.Execute(async(client: MongoClient) => {
-            const col = client.db("Bot").collection("modules")
+    public async get(): Promise<ModulesDoc> {
+        return Database.Execute(async (client: MongoClient) => {
+            const col = client.db("Bot").collection<ModulesDoc>("modules")
 
-            let res = await col.findOne({_id:this.guildId})
+            const res = await col.findOne({ _id: this.guildId })
+            if (res) return res
 
-            console.log(res)
-
-            if (!res) {
-                await col.insertOne({
-                    _id: this.guildId
-                })
-
-                return {
-                    _id: this.guildId
-                }
-            } else {
-                return res
-            }
+            const fresh: ModulesDoc = { _id: this.guildId }
+            await col.insertOne(fresh)
+            return fresh
         })
     }
 
-    public async toggle(module: string, status: boolean) {
-        const Data = await this.get()
-        if (!Data) return true
-        return await Database.Execute(async(client: MongoClient) => {
-            const col = client.db("Bot").collection("modules")
-            let newStatus
-            if (status != null) {
-                newStatus = status
-            } else {
-                newStatus = ((`${module}` in Data) ? !Data[module].enabled : false) 
-            }
+    /**
+     * Toggle (or explicitly set) a module's enabled flag.
+     * @returns the new enabled state.
+     */
+    public async toggle(module: string, status: boolean | null): Promise<boolean> {
+        const data = await this.get()
 
-            const updateDoc = Data
-            if (module in Data) {
-                updateDoc[module].enabled = newStatus
-            } else {
-                updateDoc[module] = {
-                    enabled: newStatus
-                }
-            }
+        const current = data[module] as ModuleState | undefined
+        const newStatus = status != null ? status : !(current?.enabled ?? true)
 
-            await col.updateOne({
-                _id: this.guildId
-            }, {
-                $set: updateDoc
-            })
-
+        return Database.Execute(async (client: MongoClient) => {
+            const col = client.db("Bot").collection<ModulesDoc>("modules")
+            await col.updateOne(
+                { _id: this.guildId },
+                { $set: { [`${module}.enabled`]: newStatus } },
+                { upsert: true }
+            )
             return newStatus
         })
     }
 
-    public async set(module: string, settings) {
-        const Data = await this.get()
-        return await Database.Execute(async(client: MongoClient) => {
-            const col = client.db("Bot").collection("modules")
+    /** Merge arbitrary settings into a module's sub-document. */
+    public async set(module: string, settings: Record<string, unknown>): Promise<void> {
+        await this.get()
 
-            await col.updateOne({
-                _id: this.guildId
-            }, {
-                $set: settings
-            })
+        const update: Record<string, unknown> = {}
+        for (const [key, value] of Object.entries(settings)) {
+            update[`${module}.${key}`] = value
+        }
+
+        await Database.Execute(async (client: MongoClient) => {
+            const col = client.db("Bot").collection<ModulesDoc>("modules")
+            if (Object.keys(update).length) {
+                await col.updateOne({ _id: this.guildId }, { $set: update }, { upsert: true })
+            }
         })
     }
 }
