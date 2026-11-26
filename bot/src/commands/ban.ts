@@ -7,6 +7,7 @@ import {
     SlashCommandBuilder,
 } from "discord.js"
 import { brandEmbed, errorEmbed, successEmbed } from "../lib/embeds"
+import { logEvent, modLogEmbed } from "../lib/logging"
 import { checkHierarchy, requireModeration } from "../lib/moderation"
 import { Command } from "../types"
 
@@ -77,6 +78,16 @@ const command: Command = {
                     embeds: [successEmbed("Member banned", `<@${userId}> was banned.\n**Reason:** ${reason}`)],
                     components: [],
                 })
+                await logEvent(
+                    interaction.guild!,
+                    modLogEmbed({
+                        action: "Ban",
+                        color: 0xf64f52,
+                        target: { tag: userId, id: userId },
+                        moderator: { tag: interaction.user.tag, id: interaction.user.id },
+                        reason,
+                    })
+                )
             } catch {
                 await interaction.update({
                     embeds: [errorEmbed("Ban failed", "I couldn't ban that user. Check my permissions.")],

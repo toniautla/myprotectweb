@@ -6,11 +6,15 @@ import {
     Interaction,
     MessageFlags,
 } from "discord.js"
+import { EmbedBuilder } from "discord.js"
 import { config } from "./config"
 import { connect } from "./database"
 import { commands, componentHandlers } from "./commands"
 import { errorEmbed } from "./lib/embeds"
 import { syncGuild, removeGuild } from "./lib/guildSync"
+import { logEvent } from "./lib/logging"
+import { processJobs } from "./lib/jobs"
+import { startPhishingList } from "./lib/phishingList"
 import { handleAntiPhishing } from "./modules/antiphishing"
 import { handleContentProtect } from "./modules/contentprotect"
 import { handleAntiRaid } from "./modules/antiraid"
@@ -36,6 +40,12 @@ client.once(Events.ClientReady, async (c) => {
     const syncAll = () => Promise.all(c.guilds.cache.map((g) => syncGuild(g)))
     await syncAll()
     setInterval(syncAll, 10 * 60 * 1000)
+
+    // Poll for dashboard-triggered jobs (publish rules / verification panel).
+    setInterval(() => processJobs(c).catch((e) => console.error("[jobs]", e)), 5000)
+
+    // Keep the live phishing-domain list fresh.
+    startPhishingList()
 })
 
 // ── Slash commands & component interactions ──────────────────────────────
@@ -81,12 +91,35 @@ client.on(Events.GuildBanAdd, (ban) => syncGuild(ban.guild))
 client.on(Events.GuildBanRemove, (ban) => syncGuild(ban.guild))
 client.on(Events.InviteCreate, (invite) => invite.guild && "channels" in invite.guild && syncGuild(invite.guild as any))
 client.on(Events.InviteDelete, (invite) => invite.guild && "channels" in invite.guild && syncGuild(invite.guild as any))
-client.on(Events.GuildMemberRemove, (member) => member.guild && syncGuild(member.guild))
+client.on(Events.GuildMemberRemove, (member) => {
+    if (!member.guild) return
+    syncGuild(member.guild)
+    logEvent(
+        member.guild,
+        new EmbedBuilder()
+            .setColor(0xf64f52)
+            .setAuthor({ name: `Member left — ${member.user?.tag ?? member.id}` })
+            .setDescription(`<@${member.id}> left the server.`)
+            .setTimestamp()
+    )
+})
 
 // ── Protection modules ───────────────────────────────────────────────────
 client.on(Events.GuildMemberAdd, async (member) => {
     await handleAntiRaid(member).catch(() => null)
     await syncGuild(member.guild).catch(() => null)
+    await logEvent(
+        member.guild,
+        new EmbedBuilder()
+            .setColor(0x37ef48)
+            .setAuthor({ name: `Member joined — ${member.user.tag}` })
+            .setDescription(
+                `<@${member.id}> joined.\nAccount created <t:${Math.floor(
+                    member.user.createdTimestamp / 1000
+                )}:R>.`
+            )
+            .setTimestamp()
+    ).catch(() => null)
 })
 client.on(Events.MessageCreate, async (message) => {
     await handleAntiPhishing(message).catch(() => null)

@@ -113,6 +113,30 @@ export interface PhishingDoc {
     domains?: string[]
 }
 
+export interface VerificationDoc {
+    _id: string
+    roleId?: string
+    channelId?: string
+    mode?: "button" | "captcha"
+    message?: string
+}
+
+export interface LoggingDoc {
+    _id: string
+    channelId?: string
+}
+
+export interface JobDoc {
+    _id?: ObjectId
+    guildId: string
+    type: "postRules" | "postVerify"
+    payload: Record<string, unknown>
+    status: "pending" | "done" | "error"
+    createdAt: Date
+    result?: string
+    error?: string
+}
+
 // ── Typed collection accessors ───────────────────────────────────────────
 
 export const collections = {
@@ -123,4 +147,7 @@ export const collections = {
     backups: (): Collection<BackupDoc> => db("Bot").collection("backups"),
     warnings: (): Collection<WarningDoc> => db("Bot").collection("warnings"),
     phishingLinks: (): Collection<PhishingDoc> => db("Bot").collection("phishing_links"),
+    verification: (): Collection<VerificationDoc> => db("Bot").collection("verification"),
+    logging: (): Collection<LoggingDoc> => db("Bot").collection("logging"),
+    jobs: (): Collection<JobDoc> => db("Bot").collection("jobs"),
 }

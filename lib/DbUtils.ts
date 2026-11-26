@@ -7,7 +7,14 @@ import Database from "./Database"
  * and write. Anything outside this list is rejected by the API routes so a
  * logged-in user can never touch arbitrary collections.
  */
-export const ALLOWED_COLLECTIONS = ["rules", "channels", "phishing_links", "modules"] as const
+export const ALLOWED_COLLECTIONS = [
+    "rules",
+    "channels",
+    "phishing_links",
+    "modules",
+    "verification",
+    "logging",
+] as const
 export type AllowedCollection = (typeof ALLOWED_COLLECTIONS)[number]
 
 export function isAllowedCollection(collection: string): collection is AllowedCollection {

@@ -22,6 +22,9 @@ collections in MongoDB:
 | `Bot.rules`             | Dashboard  | **Bot**   | The configurable rules embed              |
 | `Bot.channels`          | Dashboard  | **Bot**   | Filtered ("special") channels             |
 | `Bot.phishing_links`    | Dashboard  | **Bot**   | Optional custom phishing domains          |
+| `Bot.verification`      | Dashboard  | **Bot**   | Verification role / channel / mode        |
+| `Bot.logging`           | Dashboard  | **Bot**   | Log channel for mod actions & joins       |
+| `Bot.jobs`              | Dashboard  | **Bot**   | Queued actions (publish rules / panel)    |
 | `Bot.backups`           | Bot        | Bot       | Server backups                            |
 | `Bot.warnings`          | Bot        | Bot       | Moderation warnings                       |
 
@@ -104,20 +107,32 @@ npm run build && npm run start
 
 ### Slash commands
 
-| Command           | Module        | Discord UI used                     |
-| ----------------- | ------------- | ----------------------------------- |
-| `/dashboard`      | —             | Embed + link buttons                |
-| `/modules`        | —             | Embed + **toggle buttons**          |
-| `/setup`          | —             | Embed + **multi-select dropdown**   |
-| `/rules post`     | Rules         | Builds the configured embed+buttons |
-| `/rules preview`  | Rules         | Ephemeral embed                     |
-| `/rules edit`     | Rules         | **Modal** (title/description/colour)|
-| `/ban`            | Moderation    | Embed + **confirm/cancel buttons**  |
-| `/kick`           | Moderation    | Embed                               |
-| `/purge`          | Moderation    | Embed                               |
-| `/warn add/list`  | Moderation    | Embeds + stored warnings            |
-| `/backup create`  | Backups       | Embed                               |
-| `/backup list`    | Backups       | **Dropdown** + confirm buttons      |
+| Command            | Group        | Discord UI used                       |
+| ------------------ | ------------ | ------------------------------------- |
+| `/dashboard`       | Setup        | Embed + link buttons                  |
+| `/setup`           | Setup        | Embed + **multi-select dropdown**     |
+| `/modules`         | Setup        | Embed + **toggle buttons**            |
+| `/verifysetup`     | Verification | Posts the **verify panel** (button)   |
+| `/rules post`      | Rules        | Builds the configured embed + buttons |
+| `/rules preview`   | Rules        | Ephemeral embed                       |
+| `/rules edit`      | Rules        | **Modal** (title/description/colour)  |
+| `/ban`             | Moderation   | Embed + **confirm/cancel buttons**    |
+| `/kick`            | Moderation   | Embed                                 |
+| `/timeout`         | Moderation   | Embed + duration **choices**          |
+| `/untimeout`       | Moderation   | Embed                                 |
+| `/unban`           | Moderation   | Embed (by user ID)                    |
+| `/warn add\|list`  | Moderation   | Embeds + stored warnings              |
+| `/purge`           | Moderation   | Embed                                 |
+| `/lock` `/unlock`  | Security     | Locks/unlocks the channel             |
+| `/slowmode`        | Security     | Sets channel slowmode                 |
+| `/backup create`   | Backups      | Embed                                 |
+| `/backup list`     | Backups      | **Dropdown** + confirm buttons        |
+| `/botinfo`         | Info         | Stats embed + links                   |
+| `/serverinfo`      | Info         | Server stats embed                    |
+| `/userinfo`        | Info         | Member info embed                     |
+| `/avatar`          | Info         | Avatar embed                          |
+| `/ping`            | Info         | Latency embed                         |
+| `/help`            | Info         | Categorised command list              |
 
 ### Passive modules (event-driven, gated by the toggle)
 
@@ -128,9 +143,22 @@ npm run build && npm run start
 - **AntiRaid** — sliding-window join-burst detection; kicks new accounts during
   a raid.
 - **Webhooks** — removes webhooks created by non-admins (a common raid vector).
+- **Verification** — a verify panel (button or captcha modal) grants a configured
+  role. Configure the role/channel/mode on the dashboard; post the panel from the
+  dashboard or with `/verifysetup`.
+- **Logging** — posts mod actions (ban/kick/warn/timeout/lock) and member
+  joins/leaves to a configured channel.
 
 A module counts as **enabled** when it is missing from `Bot.modules` or has
 `enabled !== false` — identical logic on both sides.
+
+### Dashboard → bot actions
+
+The dashboard is serverless and can't talk to Discord's gateway, so "Publish
+rules" and "Post verification panel" write a row to `Bot.jobs`; the always-on
+bot polls that collection every few seconds and performs the action. This is how
+the live **rules preview + Publish** button and the verification panel poster
+work from the web UI.
 
 ---
 

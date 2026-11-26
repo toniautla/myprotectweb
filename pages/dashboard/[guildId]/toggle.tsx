@@ -4,17 +4,19 @@ import BaseLayout from "../../../components/BaseLayout"
 import InviteScreen from "../../../components/InviteScreen"
 import { loadGuildContext } from "../../../lib/guildProps"
 import { Modules } from "../../../lib/Modules"
-import { FaCheck, FaChessRook, FaDatabase, FaFish, FaHammer, FaHandPaper, FaMailBulk } from "react-icons/fa"
+import { FaCheck, FaChessRook, FaClipboardList, FaDatabase, FaFish, FaHammer, FaHandPaper, FaMailBulk, FaUserCheck } from "react-icons/fa"
 import api from "../../../lib/api"
 
 const MODULES = [
     { module: "Moderation", name: "Moderation", icon: FaHammer },
     { module: "Rules", name: "Rules", icon: FaCheck },
+    { module: "Verification", name: "Verification", icon: FaUserCheck },
     { module: "Backups", name: "Backups", icon: FaDatabase },
     { module: "AntiRaid", name: "Anti Raid", icon: FaHandPaper },
     { module: "AntiPhishing", name: "Anti Phishing", icon: FaFish },
     { module: "Webhooks", name: "Webhook Protection", icon: FaChessRook },
     { module: "ContentProtect", name: "Special Channels", icon: FaMailBulk },
+    { module: "Logging", name: "Logging", icon: FaClipboardList },
 ]
 
 function ModuleBox({ guildId, module, name, icon, initial }) {

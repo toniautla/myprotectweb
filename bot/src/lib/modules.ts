@@ -8,6 +8,8 @@ export const MODULE_KEYS = [
     "AntiPhishing",
     "Webhooks",
     "ContentProtect",
+    "Verification",
+    "Logging",
 ] as const
 
 export type ModuleKey = (typeof MODULE_KEYS)[number]
@@ -20,6 +22,8 @@ export const MODULE_LABELS: Record<ModuleKey, string> = {
     AntiPhishing: "Anti Phishing",
     Webhooks: "Webhook Protection",
     ContentProtect: "Special Channels",
+    Verification: "Verification",
+    Logging: "Logging",
 }
 
 /**

@@ -36,6 +36,12 @@ const STEPS = [
             "Add rules for your server and present them in a clean, appealing embed — set up from both the Dashboard and the bot.",
     },
     {
+        module: "Verification",
+        title: "Verification",
+        description:
+            "Gate new members behind a verify button or a simple captcha before they can access the server.",
+    },
+    {
         module: "Backups",
         title: "Backups",
         description:
@@ -60,6 +66,11 @@ const STEPS = [
         module: "ContentProtect",
         title: "Filtered (Special) Channels",
         description: "Restrict specific channel content to its topic (media-only, links-only, etc.).",
+    },
+    {
+        module: "Logging",
+        title: "Logging",
+        description: "Send moderation actions and member joins/leaves to a log channel of your choice.",
     },
 ]
 
