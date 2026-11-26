@@ -1,11 +1,20 @@
 import { Box, Button, Flex, Heading, Text } from "@chakra-ui/react"
-import { getSession, signIn } from "next-auth/react"
-import { FaDiscord } from "react-icons/fa"
+import { useRouter } from "next/router"
 import { useState } from "react"
+import { FaDiscord } from "react-icons/fa"
 import BaseLayout from "../components/BaseLayout"
+import { readSession } from "../lib/session"
+
+const ERRORS: Record<string, string> = {
+    state: "Login session expired or cookies were blocked. Please try again.",
+    token: "Discord rejected the login. Please try again.",
+    user: "Couldn't load your Discord profile. Please try again.",
+}
 
 export default function SignIn() {
+    const router = useRouter()
     const [isLoading, setLoading] = useState(false)
+    const error = typeof router.query.error === "string" ? ERRORS[router.query.error] : undefined
 
     return (
         <BaseLayout pageTitle={"Login"}>
@@ -24,9 +33,14 @@ export default function SignIn() {
                     <Heading fontSize={{ base: "2xl", md: "3xl" }} mb={3}>
                         Welcome back
                     </Heading>
-                    <Text color="gray.400" mb={8}>
+                    <Text color="gray.400" mb={error ? 4 : 8}>
                         Log in with Discord to manage your servers with MyProtect.
                     </Text>
+                    {error && (
+                        <Text color="red.300" mb={6} fontSize="sm">
+                            {error}
+                        </Text>
+                    )}
                     <Button
                         w="100%"
                         size="lg"
@@ -38,7 +52,7 @@ export default function SignIn() {
                         loadingText="Redirecting to Discord..."
                         onClick={() => {
                             setLoading(true)
-                            signIn("discord", { callbackUrl: "/dashboard" })
+                            window.location.href = "/api/auth/login"
                         }}
                     >
                         Login with Discord
@@ -49,9 +63,8 @@ export default function SignIn() {
     )
 }
 
-export async function getServerSideProps(context) {
-    const session = await getSession(context)
-    if (session) {
+export async function getServerSideProps(ctx) {
+    if (readSession(ctx.req)) {
         return { redirect: { destination: "/dashboard", permanent: false } }
     }
     return { props: {} }
