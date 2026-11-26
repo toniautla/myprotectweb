@@ -16,42 +16,48 @@ export interface DiscordGuild {
 }
 
 async function fetchDiscord(path: string, token: string) {
-    const response = await fetch(`https://discord.com/api${path}`, {
-        headers: { Authorization: `Bearer ${token}` },
-    })
-    if (!response.ok) return null
-    return response.json()
-}
-
-/** The Discord user object, cached for a minute. */
-const formUser = async (token: string) => {
-    const userCache = new Cache("userCache", 1)
-    const cached = await userCache.retrieve({ _id: token })
-    if (cached.user) return cached.user
-
-    const data = await fetchDiscord("/users/@me", token)
-    if (!data || !("id" in data)) {
-        const stale = await userCache.retrieve({ _id: token }, true)
-        return stale.user || {}
+    try {
+        const response = await fetch(`https://discord.com/api${path}`, {
+            headers: { Authorization: `Bearer ${token}` },
+        })
+        if (!response.ok) return null
+        return await response.json()
+    } catch {
+        return null
     }
-
-    await userCache.update({ _id: token }, { user: data })
-    return data
 }
 
-/** The user's guilds, cached for a minute. */
-const formGuilds = async (token: string): Promise<DiscordGuild[]> => {
+/**
+ * The user's manageable guilds, cached for a minute. Every failure mode here is
+ * swallowed and returns `[]` — the user must still be able to log in even if
+ * MongoDB or the Discord guilds endpoint is temporarily unavailable.
+ */
+const formGuilds = async (token: string): Promise<any[]> => {
     const userCache = new Cache("userCache", 1)
-    const cached = await userCache.retrieve({ _id: token })
-    if (cached.guilds) return cached.guilds
+
+    // Cache read (tolerate a dead/unreachable DB).
+    try {
+        const cached = await userCache.retrieve({ _id: token })
+        if (cached.guilds) return cached.guilds
+    } catch {
+        /* ignore cache errors */
+    }
 
     const data = await fetchDiscord("/users/@me/guilds", token)
     if (!Array.isArray(data)) {
-        const stale = await userCache.retrieve({ _id: token }, true)
-        return stale.guilds || []
+        try {
+            const stale = await userCache.retrieve({ _id: token }, true)
+            return stale.guilds || []
+        } catch {
+            return []
+        }
     }
 
-    await userCache.update({ _id: token }, { guilds: data })
+    try {
+        await userCache.update({ _id: token }, { guilds: data })
+    } catch {
+        /* ignore cache write errors */
+    }
     return data
 }
 
@@ -72,36 +78,52 @@ export const authOptions: NextAuthOptions = {
         maxAge: 30 * 24 * 60 * 60,
     },
     callbacks: {
-        async jwt({ token, account }) {
-            // On initial sign-in `account` is present; stash the access token.
+        async jwt({ token, account, profile }) {
+            // On initial sign-in `account` + `profile` are present. Capture the
+            // identity into the JWT so later session reads need NO network/DB.
             if (account) {
                 token.accessToken = account.access_token
                 token.accessTokenExpires = account.expires_at
                     ? account.expires_at * 1000
                     : Date.now() + 7 * 24 * 60 * 60 * 1000
             }
+            if (profile) {
+                const p = profile as any
+                token.discordId = p.id
+                token.discordName = p.global_name || p.username
+                token.discordAvatar = p.avatar
+                    ? `https://cdn.discordapp.com/avatars/${p.id}/${p.avatar}.png`
+                    : null
+            }
             return token
         },
         async session({ session, token }) {
-            const accessToken = token.accessToken as string | undefined
-            session.accessToken = accessToken
+            // Identity comes straight from the token — never fails.
+            session.accessToken = token.accessToken as string | undefined
+            session.user = {
+                ...session.user,
+                name: (token.discordName as string) || session.user?.name,
+                image: (token.discordAvatar as string) || session.user?.image,
+            }
+            session.data = {
+                id: token.discordId,
+                username: token.discordName,
+                avatar: token.discordAvatar,
+            }
 
-            if (accessToken) {
-                const data = await formUser(accessToken)
-                session.data = data
-                // Keep next-auth's default `user` populated from the profile.
-                session.user = {
-                    name: data.global_name || data.username,
-                    image: data.avatar
-                        ? `https://cdn.discordapp.com/avatars/${data.id}/${data.avatar}.png`
-                        : null,
-                    ...session.user,
+            // Guilds are best-effort: a failure yields [] instead of breaking login.
+            session.guilds = []
+            if (session.accessToken) {
+                try {
+                    const guilds = await formGuilds(session.accessToken)
+                    session.guilds = guilds
+                        .filter(
+                            (g) => g.owner || (BigInt(g.permissions) & MANAGE_GUILD) > 0n
+                        )
+                        .sort((a, b) => a.name.localeCompare(b.name))
+                } catch {
+                    session.guilds = []
                 }
-
-                const guilds = await formGuilds(accessToken)
-                session.guilds = guilds
-                    .filter((guild) => guild.owner || (BigInt(guild.permissions) & MANAGE_GUILD) > 0n)
-                    .sort((a, b) => a.name.localeCompare(b.name))
             }
 
             return session
