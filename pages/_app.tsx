@@ -1,7 +1,6 @@
 import type { AppProps } from "next/app"
 import { ChakraProvider, Image } from "@chakra-ui/react"
 import { Flex } from "@chakra-ui/layout"
-import { SessionProvider } from "next-auth/react"
 import Router from "next/router"
 import Head from "next/head"
 import { useEffect, useState } from "react"
@@ -31,34 +30,32 @@ function MyApp({ Component, pageProps }: AppProps) {
     }, [])
 
     return (
-        <SessionProvider session={(pageProps as any).session}>
-            <ThemeProvider theme={muiTheme}>
-                <ChakraProvider resetCSS theme={theme}>
-                    <Head>
-                        <meta name="viewport" content="width=device-width, initial-scale=1" />
-                        <link
-                            rel="stylesheet"
-                            href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap"
-                        />
-                    </Head>
-                    {isLoading && (
-                        <Image
-                            alt="loading"
-                            src="/loading.svg"
-                            boxSize="50px"
-                            position="fixed"
-                            bottom="10px"
-                            right="10px"
-                            draggable={false}
-                            zIndex={2000}
-                        />
-                    )}
-                    <Flex flexDirection="column" minH="100vh">
-                        <Component {...pageProps} />
-                    </Flex>
-                </ChakraProvider>
-            </ThemeProvider>
-        </SessionProvider>
+        <ThemeProvider theme={muiTheme}>
+            <ChakraProvider resetCSS theme={theme}>
+                <Head>
+                    <meta name="viewport" content="width=device-width, initial-scale=1" />
+                    <link
+                        rel="stylesheet"
+                        href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap"
+                    />
+                </Head>
+                {isLoading && (
+                    <Image
+                        alt="loading"
+                        src="/loading.svg"
+                        boxSize="50px"
+                        position="fixed"
+                        bottom="10px"
+                        right="10px"
+                        draggable={false}
+                        zIndex={2000}
+                    />
+                )}
+                <Flex flexDirection="column" minH="100vh">
+                    <Component {...pageProps} />
+                </Flex>
+            </ChakraProvider>
+        </ThemeProvider>
     )
 }
 

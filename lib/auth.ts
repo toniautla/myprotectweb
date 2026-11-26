@@ -1,13 +1,26 @@
 import type { NextApiRequest, NextApiResponse, GetServerSidePropsContext } from "next"
-import { getServerSession, Session } from "next-auth"
-import { authOptions } from "../pages/api/auth/[...nextauth]"
+import {
+    DiscordGuild,
+    loadManageableGuilds,
+    readSession,
+    Session as BaseSession,
+} from "./session"
 
-/** Resolve the current session (API route or getServerSideProps). */
-export function resolveSession(
-    req: NextApiRequest | GetServerSidePropsContext["req"],
-    res: NextApiResponse | GetServerSidePropsContext["res"]
-): Promise<Session | null> {
-    return getServerSession(req as any, res as any, authOptions)
+export interface Session extends BaseSession {
+    guilds: DiscordGuild[]
+}
+
+type ReqLike = NextApiRequest | GetServerSidePropsContext["req"]
+
+/**
+ * Resolve the current session (API route or getServerSideProps), including the
+ * user's manageable guilds. Returns null when not logged in.
+ */
+export async function resolveSession(req: ReqLike, _res?: unknown): Promise<Session | null> {
+    const base = readSession(req as any)
+    if (!base) return null
+    const guilds = await loadManageableGuilds(base.accessToken)
+    return { ...base, guilds }
 }
 
 export interface GuildAuthResult {
@@ -18,28 +31,20 @@ export interface GuildAuthResult {
 }
 
 /**
- * Authorize a mutation against a specific guild. The user must be logged in AND
- * manage the target guild (owner or MANAGE_GUILD) — exactly the guilds surfaced
- * in `session.guilds`. This replaces the old "client sends the secret" model,
- * which exposed the Discord client secret to the browser.
+ * Authorize a mutation against a specific guild: the user must be logged in AND
+ * manage the target guild (owner or MANAGE_GUILD).
  */
 export async function authorizeGuild(
     req: NextApiRequest,
-    res: NextApiResponse,
+    _res: NextApiResponse,
     guildId: string | undefined
 ): Promise<GuildAuthResult> {
-    const session = await resolveSession(req, res)
+    const session = await resolveSession(req)
 
-    if (!session) {
-        return { ok: false, status: 401, session: null, message: "Not authenticated" }
-    }
-    if (!guildId) {
-        return { ok: false, status: 400, session, message: "Missing guild id" }
-    }
-    const manages = session.guilds?.some((g) => g.id === guildId)
-    if (!manages) {
+    if (!session) return { ok: false, status: 401, session: null, message: "Not authenticated" }
+    if (!guildId) return { ok: false, status: 400, session, message: "Missing guild id" }
+    if (!session.guilds.some((g) => g.id === guildId)) {
         return { ok: false, status: 403, session, message: "You do not manage this guild" }
     }
-
     return { ok: true, status: 200, session }
 }

@@ -37,7 +37,7 @@ the rules on the dashboard → `/rules post` publishes them. Toggle a module wit
 - A MongoDB instance (local or Atlas) — **the same URI for both apps**
 - A Discord application: <https://discord.com/developers/applications>
   - **OAuth2** → copy the *Client ID* and *Client Secret*
-  - **OAuth2 → Redirects** → add `http://localhost:3000/api/auth/callback/discord`
+  - **OAuth2 → Redirects** → add `http://localhost:3000/api/auth/callback`
   - **Bot** → create a bot, copy the *token*
   - **Bot → Privileged Gateway Intents** → enable **Server Members Intent** and
     **Message Content Intent** (used by Anti-Raid, Anti-Phishing and the channel
@@ -67,11 +67,14 @@ npm run build && npm run start
 
 - **Secrets** moved out of the committed `config.json` into environment
   variables (`lib/config.ts`).
-- **Auth** upgraded from the unmaintained `next-auth@3.29` to **next-auth v4**
-  (`pages/api/auth/[...nextauth].tsx`), with a clean Discord login.
+- **Auth** replaced the unmaintained `next-auth@3.29` with a small, direct
+  Discord OAuth2 flow (`lib/session.ts`, `pages/api/auth/{login,callback,logout}.ts`).
+  It uses our own `state` cookie and an HMAC-signed httpOnly session cookie —
+  no `openid-client`, which was throwing `issuer must be configured` /
+  `state cookie missing` errors on serverless.
 - **Security**: the old model shipped the Discord *client secret* to the
   browser and used it as an API key. API routes now authenticate with the
-  NextAuth **session** and verify the user actually manages the target guild
+  signed **session** and verify the user actually manages the target guild
   (`lib/auth.ts`), and only an allow-list of collections can be written.
 - **Reliability**: lazy MongoDB connection (no more build-time crash), fixed
   `Modules`/`Cache`/`DbUtils` logic bugs, null-guild handling, and a
