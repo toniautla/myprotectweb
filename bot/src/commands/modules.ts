@@ -19,6 +19,8 @@ const MODULE_EMOJI: Record<ModuleKey, string> = {
     AntiPhishing: "🎣",
     Webhooks: "🪝",
     ContentProtect: "📥",
+    Verification: "✅",
+    Logging: "📋",
 }
 
 async function render(guildId: string) {

@@ -1,5 +1,6 @@
 import { ChatInputCommandInteraction, PermissionFlagsBits, SlashCommandBuilder } from "discord.js"
 import { errorEmbed, successEmbed } from "../lib/embeds"
+import { logEvent, modLogEmbed } from "../lib/logging"
 import { checkHierarchy, requireModeration } from "../lib/moderation"
 import { Command } from "../types"
 
@@ -29,6 +30,16 @@ const command: Command = {
             await interaction.reply({
                 embeds: [successEmbed("Member kicked", `**${user.tag}** was kicked.\n**Reason:** ${reason}`)],
             })
+            await logEvent(
+                interaction.guild!,
+                modLogEmbed({
+                    action: "Kick",
+                    color: 0xf5a623,
+                    target: { tag: user.tag, id: user.id },
+                    moderator: { tag: interaction.user.tag, id: interaction.user.id },
+                    reason,
+                })
+            )
         } catch {
             await interaction.reply({
                 embeds: [errorEmbed("Kick failed", "I couldn't kick that user. Check my permissions.")],

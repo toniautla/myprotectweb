@@ -21,6 +21,8 @@ const MODULE_DESCRIPTIONS: Record<ModuleKey, string> = {
     AntiPhishing: "Delete scam & phishing links.",
     Webhooks: "Remove compromised webhooks.",
     ContentProtect: "Restrict channels to their topic.",
+    Verification: "Gate new members behind a verify button / captcha.",
+    Logging: "Log mod actions and joins/leaves to a channel.",
 }
 
 async function render(guildId: string) {

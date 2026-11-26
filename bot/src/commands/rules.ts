@@ -1,9 +1,6 @@
 import {
     ActionRowBuilder,
-    ButtonBuilder,
-    ButtonStyle,
     ChatInputCommandInteraction,
-    EmbedBuilder,
     ModalBuilder,
     PermissionFlagsBits,
     SlashCommandBuilder,
@@ -12,55 +9,11 @@ import {
     TextInputStyle,
 } from "discord.js"
 import { config } from "../config"
-import { collections, RulesDoc } from "../database"
+import { collections } from "../database"
 import { brandEmbed, errorEmbed, successEmbed } from "../lib/embeds"
 import { isModuleEnabled } from "../lib/modules"
+import { buildRulesMessage } from "../lib/rulesMessage"
 import { Command } from "../types"
-
-function isValidHttpUrl(value?: string): boolean {
-    if (!value) return false
-    try {
-        const u = new URL(value)
-        return u.protocol === "http:" || u.protocol === "https:"
-    } catch {
-        return false
-    }
-}
-
-/** Build the public rules message from the shared `Bot.rules` document. */
-function buildRules(doc: RulesDoc | null) {
-    const embed = new EmbedBuilder()
-    embed.setColor(doc?.color ? parseInt(doc.color.replace("#", ""), 16) || 0x1a8eff : 0x1a8eff)
-    embed.setTitle(doc?.title || "Server Rules")
-    if (doc?.description) embed.setDescription(doc.description)
-    if (doc?.authorName) {
-        embed.setAuthor({
-            name: doc.authorName,
-            iconURL: isValidHttpUrl(doc.authorIcon) ? doc.authorIcon : undefined,
-        })
-    }
-    if (isValidHttpUrl(doc?.imageUrl)) embed.setImage(doc!.imageUrl!)
-
-    const rules = (doc?.rules || []).filter((r) => r.title && r.description).slice(0, 25)
-    if (rules.length) {
-        embed.addFields(rules.map((r, i) => ({ name: `${i + 1}. ${r.title}`, value: r.description })))
-    }
-
-    // Link buttons (max 5 per row, max 5 rows).
-    const buttons = (doc?.buttons || []).filter((b) => b.label && isValidHttpUrl(b.link)).slice(0, 25)
-    const rows: ActionRowBuilder<ButtonBuilder>[] = []
-    for (let i = 0; i < buttons.length; i += 5) {
-        rows.push(
-            new ActionRowBuilder<ButtonBuilder>().addComponents(
-                buttons.slice(i, i + 5).map((b) =>
-                    new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel(b.label).setURL(b.link)
-                )
-            )
-        )
-    }
-
-    return { embed, rows, hasContent: Boolean(doc?.title || rules.length) }
-}
 
 const command: Command = {
     data: new SlashCommandBuilder()
@@ -117,7 +70,7 @@ const command: Command = {
             return
         }
 
-        const { embed, rows, hasContent } = buildRules(doc)
+        const { embed, rows, hasContent } = buildRulesMessage(doc)
 
         if (!hasContent) {
             await interaction.reply({

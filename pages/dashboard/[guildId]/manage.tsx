@@ -6,6 +6,8 @@ import { FetchGuildDoc } from "../../../lib/DbUtils"
 import { FaCog } from "react-icons/fa"
 import RuleModal from "../../../components/ManageModals/Rules"
 import ChannelModal from "../../../components/ManageModals/Channels"
+import VerificationModal from "../../../components/ManageModals/Verification"
+import LoggingModal from "../../../components/ManageModals/Logging"
 
 function ManageBox({ name, description, doc, Modal, guild }) {
     const { isOpen, onOpen, onClose } = useDisclosure()
@@ -58,8 +60,10 @@ export default function ManagePage({ guild, docs }) {
                 </Text>
             </Flex>
             <Flex direction="column" alignItems="center" gap={5} px={6} pb={10}>
-                <ManageBox name="Rules" description="Manage the server rules embed." doc={docs.rules} Modal={RuleModal} guild={guild} />
+                <ManageBox name="Rules" description="Build a rules embed with a live preview, then publish it." doc={docs.rules} Modal={RuleModal} guild={guild} />
+                <ManageBox name="Verification" description="Gate new members behind a verify button or captcha." doc={docs.verification} Modal={VerificationModal} guild={guild} />
                 <ManageBox name="Filtered Channels" description="Secure channel content by topic." doc={docs.channels} Modal={ChannelModal} guild={guild} />
+                <ManageBox name="Logging" description="Send mod actions and joins/leaves to a log channel." doc={docs.logging} Modal={LoggingModal} guild={guild} />
             </Flex>
         </BaseLayout>
     )
@@ -71,14 +75,18 @@ export const getServerSideProps = async (ctx) => {
 
     const { session, guild } = ctxResult
 
-    let docs = { rules: { rules: [], buttons: [] }, channels: {} }
+    let docs = { rules: { rules: [], buttons: [] }, channels: {}, verification: {}, logging: {} }
     if (guild) {
         const rules = (await FetchGuildDoc(guild._id, "rules")) as any
         const channels = (await FetchGuildDoc(guild._id, "channels")) as any
+        const verification = (await FetchGuildDoc(guild._id, "verification")) as any
+        const logging = (await FetchGuildDoc(guild._id, "logging")) as any
         docs = JSON.parse(
             JSON.stringify({
                 rules: { rules: [], buttons: [], ...rules },
                 channels: channels || {},
+                verification: verification || {},
+                logging: logging || {},
             })
         )
     }
