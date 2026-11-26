@@ -55,7 +55,7 @@ npm run dev                     # http://localhost:3000
 
 `.env.local` values are documented in [`.env.example`](.env.example). In short:
 `MONGO_URI`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `NEXTAUTH_SECRET`,
-`NEXTAUTH_URL`, and the public `NEXT_PUBLIC_DISCORD_CLIENT_ID`.
+and `NEXTAUTH_URL`.
 
 Production:
 
@@ -136,7 +136,8 @@ A module counts as **enabled** when it is missing from `Bot.modules` or has
 
 ## 4. Inviting the bot
 
-The dashboard's "Invite Bot" buttons build an OAuth2 URL from
-`NEXT_PUBLIC_DISCORD_CLIENT_ID` with the `bot applications.commands` scopes.
-Adjust `NEXT_PUBLIC_DISCORD_INVITE_PERMISSIONS` (default `8` = Administrator;
-lower it for least-privilege once you know which permissions you need).
+The dashboard's "Invite Bot" buttons point at `/api/invite`, which redirects to
+Discord's authorize URL built server-side from `DISCORD_CLIENT_ID` and
+`DISCORD_INVITE_PERMISSIONS` (default `8` = Administrator; lower it for
+least-privilege once you know which permissions you need). No `NEXT_PUBLIC_*`
+build-time vars are required.
