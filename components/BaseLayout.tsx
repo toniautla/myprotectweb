@@ -1,9 +1,15 @@
-import { Box, useBreakpointValue, useColorMode } from "@chakra-ui/react";
+import { Box, useColorMode } from "@chakra-ui/react";
 import Head from "next/head";
-import { useEffect } from "react";
+import { ReactNode, useEffect } from "react";
 import Navigation from "./Navigation";
 
-export default function BaseLayout({ pageTitle, navGuild, children }) {
+interface BaseLayoutProps {
+    pageTitle: string
+    navGuild?: any
+    children: ReactNode
+}
+
+export default function BaseLayout({ pageTitle, navGuild, children }: BaseLayoutProps) {
     const { colorMode, setColorMode } = useColorMode()
 
     useEffect(() => {

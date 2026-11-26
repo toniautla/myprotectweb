@@ -1,28 +1,21 @@
-import { NextApiRequest, NextApiResponse } from "next";
-import Config from "../../../config.json"
-import { Modules } from "../../../lib/Modules";
+import { NextApiRequest, NextApiResponse } from "next"
+import { authorizeGuild } from "../../../lib/auth"
+import { Modules } from "../../../lib/Modules"
 
-export default async function GetAll(req: NextApiRequest, res : NextApiResponse) {
-    
-    if (req.method == "POST") {
-        const { key, ...data } = JSON.parse(req.body)
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+    if (req.method !== "POST") return res.status(405).json({ message: "Method not allowed" })
 
-        if (key !== Config.clientSecret) return res.status(403).json("Forbidden")
+    const { guild, module, status } = req.body || {}
 
-        const { guild, module, ...rest } = data
+    const auth = await authorizeGuild(req, res, guild)
+    if (!auth.ok) return res.status(auth.status).json({ message: auth.message })
 
-        const mod = new Modules(guild)
-
-        const newStatus = await mod.toggle(module, rest.status || null)
-
-        console.log(newStatus)
-
-        return res.json({
-            status: newStatus
-        })
-
-    } else {
-        return res.status(405).json("Method not allowed")
+    if (typeof module !== "string" || !module) {
+        return res.status(400).json({ message: "Missing module" })
     }
 
+    const mod = new Modules(guild)
+    const newStatus = await mod.toggle(module, typeof status === "boolean" ? status : null)
+
+    return res.json({ status: newStatus })
 }

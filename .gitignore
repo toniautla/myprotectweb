@@ -1,0 +1,22 @@
+# dependencies
+node_modules/
+bot/node_modules/
+
+# next.js
+.next/
+out/
+
+# bot build output
+bot/dist/
+
+# env / secrets
+.env
+.env.local
+.env.*.local
+bot/.env
+
+# misc
+*.log
+.DS_Store
+config.json
+*.tsbuildinfo

@@ -1,27 +1,44 @@
-import { MongoClient, MongoNotConnectedError } from "mongodb"
-import Config from "../config.json"
+import { MongoClient } from "mongodb"
+import config from "./config"
 
-export const client = new MongoClient(Config.mongoUri)
-client.connect()
-console.log(client.listenerCount())
-console.log("Connected to Database")
+/**
+ * Lazily-created, shared MongoClient.
+ *
+ * The client is created (and connected) the first time it is actually needed
+ * rather than at module-import time. Creating it at import time crashes the
+ * Next.js build when MONGO_URI is not set, and opening a connection eagerly is
+ * wasteful during static analysis. In development we also cache the client on
+ * `globalThis` so hot-reloads don't open a new pool on every change.
+ */
 
-async function Execute(__f) {
-    try {
+declare global {
+    // eslint-disable-next-line no-var
+    var __myprotectMongo: { client: MongoClient; promise: Promise<MongoClient> } | undefined
+}
 
-        const returnable = await __f(client)
+function getClient(): { client: MongoClient; promise: Promise<MongoClient> } {
+    if (global.__myprotectMongo) return global.__myprotectMongo
 
-        return returnable
-    } catch (e) {
-        //throw new Error(e)
-        if (e instanceof MongoNotConnectedError) {
-            await client.connect()
-            return Execute(__f)
-        }
-        else {
-            throw new Error(e)
-        }
+    if (!config.mongoUri) {
+        throw new Error("MONGO_URI is not set. Copy .env.example to .env.local and fill it in.")
     }
+
+    const client = new MongoClient(config.mongoUri)
+    const promise = client.connect()
+    const holder = { client, promise }
+
+    // Cache across hot-reloads in development.
+    if (process.env.NODE_ENV !== "production") {
+        global.__myprotectMongo = holder
+    }
+
+    return holder
+}
+
+async function Execute<T>(fn: (client: MongoClient) => Promise<T>): Promise<T> {
+    const { client, promise } = getClient()
+    await promise
+    return fn(client)
 }
 
 const Database = {

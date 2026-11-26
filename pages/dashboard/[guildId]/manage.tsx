@@ -1,114 +1,87 @@
-import { Box, Button, Flex, Icon, Text, useDisclosure } from "@chakra-ui/react"
-import { getSession } from "next-auth/client"
+import { Box, Flex, Heading, Icon, Text, useDisclosure } from "@chakra-ui/react"
 import BaseLayout from "../../../components/BaseLayout"
-import { FetchBotGuilds, FetchGuildDoc } from "../../../lib/DbUtils"
-import Config from "../../../config.json"
-import { Modules } from "../../../lib/Modules"
+import InviteScreen from "../../../components/InviteScreen"
+import { loadGuildContext } from "../../../lib/guildProps"
+import { FetchGuildDoc } from "../../../lib/DbUtils"
 import { FaCog } from "react-icons/fa"
-import api from "../../../lib/api"
 import RuleModal from "../../../components/ManageModals/Rules"
 import ChannelModal from "../../../components/ManageModals/Channels"
 
-export default function GuildDashboard({ session, guild, docs }) {
-
-    console.log(docs)
-
-    const ManageBox = ({ name, description, doc, Modal, col }) => {
-
-        const { isOpen, onOpen, onClose } = useDisclosure()
-    
-        return (
-            <Flex alignItems="center" justifyContent="space-between" w="50vw" p={8} bg="gray.800" rounded="md">
-                <Box>
-                    <Text fontSize="1.5vw" fontWeight="bold">{name}</Text>
-                    <Text fontSize=".9vw" color="gray">{description}</Text>
-                </Box>
-    
-                <Icon cursor="pointer" as={FaCog} fontSize="2.5vw" onClick={onOpen} />
-    
-                {Modal && <Modal guild={guild} onClose={onClose} isOpen={isOpen} doc={doc} />}
-            </Flex>
-        )
-    }
+function ManageBox({ name, description, doc, Modal, guild }) {
+    const { isOpen, onOpen, onClose } = useDisclosure()
 
     return (
-        <>
-            {!guild && (
-                <BaseLayout pageTitle={"Bot not in Guild"}>
-                    <Flex alignItems="center" justifyContent="center" direction="column">
-                        <Text fontSize="2.5vw" textAlign="center">{"To access this guild's Dashboard, you must invite it in the server!"}</Text>
-                        <Button
-                            colorScheme="brand.blue"
-                            onClick={() => window.open(`https://discord.com/api/oauth2/authorize?client_id=${Config.clientId}&permissions=8&scope=bot%20applications.commands`)}
-                            h="60px"
-                            w="200px"
-                            m={2}
-                        >
-                            Invite Bot
-                        </Button>
-                    </Flex>
-                </BaseLayout>
-            )}
-            {guild && (
-                <BaseLayout pageTitle={guild.name} navGuild={guild}>
-                    <Flex wrap="wrap" m={5} gap={5} direction="column" alignItems="center">
-                        <ManageBox name={"Rules"} description="manage the server rules." doc={docs.rules} Modal={RuleModal} col={"rules"} />
-                    </Flex>
+        <Flex
+            alignItems="center"
+            justifyContent="space-between"
+            w={{ base: "100%", md: "640px" }}
+            p={6}
+            bg="gray.800"
+            rounded="xl"
+            border="1px solid"
+            borderColor="whiteAlpha.100"
+            _hover={{ borderColor: "whiteAlpha.300" }}
+            className="animate"
+        >
+            <Box>
+                <Text fontSize="xl" fontWeight="bold">
+                    {name}
+                </Text>
+                <Text fontSize="sm" color="gray.400">
+                    {description}
+                </Text>
+            </Box>
 
-                    <Flex wrap="wrap" m={5} gap={5} direction="column" alignItems="center">
-                        <ManageBox name={"Filtered Channels"} description="secure channel content." doc={docs.channels} Modal={ChannelModal} col={"channels"} />
-                    </Flex>
-                </BaseLayout>
-            )}
-        </>
+            <Icon
+                cursor="pointer"
+                as={FaCog}
+                fontSize="2rem"
+                _hover={{ transform: "rotate(45deg)", color: "brand.blue.300" }}
+                className="animate"
+                onClick={onOpen}
+            />
+
+            {Modal && <Modal guild={guild} onClose={onClose} isOpen={isOpen} doc={doc} />}
+        </Flex>
+    )
+}
+
+export default function ManagePage({ guild, docs }) {
+    if (!guild) return <InviteScreen />
+
+    return (
+        <BaseLayout pageTitle={guild.name} navGuild={guild}>
+            <Flex direction="column" alignItems="center" px={6} mb={6}>
+                <Heading fontSize={{ base: "2xl", md: "3xl" }}>Manage Modules</Heading>
+                <Text color="gray.400" mt={1}>
+                    Configure how MyProtect behaves in {guild.name}.
+                </Text>
+            </Flex>
+            <Flex direction="column" alignItems="center" gap={5} px={6} pb={10}>
+                <ManageBox name="Rules" description="Manage the server rules embed." doc={docs.rules} Modal={RuleModal} guild={guild} />
+                <ManageBox name="Filtered Channels" description="Secure channel content by topic." doc={docs.channels} Modal={ChannelModal} guild={guild} />
+            </Flex>
+        </BaseLayout>
     )
 }
 
 export const getServerSideProps = async (ctx) => {
+    const ctxResult = await loadGuildContext(ctx)
+    if ("redirect" in ctxResult) return ctxResult
 
-    const session = await getSession(ctx)
-    const { guildId } = ctx.query
-    let userGuild
+    const { session, guild } = ctxResult
 
-    if (session) userGuild = session.guilds.find(g => g.id == guildId)
-
-    if (!session || !userGuild) return {
-        redirect: {
-            destination: "/login",
-            permanent: false
-        }
-    }
-
-    const botGuilds = await FetchBotGuilds()
-
-    let guild = botGuilds.find(g => g._id == guildId) || null
-
+    let docs = { rules: { rules: [], buttons: [] }, channels: {} }
     if (guild) {
-        guild = {
-            ...guild,
-            roles: guild.roles.map(role => ({
-                ...role,
-                permissions: role.permissions.toString()
-            }))
-        }
+        const rules = (await FetchGuildDoc(guild._id, "rules")) as any
+        const channels = (await FetchGuildDoc(guild._id, "channels")) as any
+        docs = JSON.parse(
+            JSON.stringify({
+                rules: { rules: [], buttons: [], ...rules },
+                channels: channels || {},
+            })
+        )
     }
 
-    const module = new Modules(guild._id)
-    const moduleSettings = await module.get()
-
-    const rules = await FetchGuildDoc(guild._id, "rules")
-    const channels = await FetchGuildDoc(guild._id, "channels")
-    const phishing_links = await FetchGuildDoc(guild._id, "phishing_links")
-
-    return {
-        props: {
-            session,
-            guild: guild || null,
-            docs: {
-                rules: Object.keys(rules) == 0 ? { rules: [], buttons: [] } : rules,
-                channels: await FetchGuildDoc(guild._id, "channels"),
-                phishing_links: await FetchGuildDoc(guild._id, "phishing_links")
-            }
-        }
-    }
+    return { props: { session, guild, docs } }
 }

@@ -102,7 +102,7 @@ export default function RuleModal({ onClose, isOpen, doc, guild }) {
 
                         <Box>
                             <FormLabel>Color</FormLabel>
-                            <Input type="color" value={`#${color}`} onChange={(e) => setColor(e.target.value.replace("#", ""))} />
+                            <Input type="color" value={`#${color || "5865f2"}`} onChange={(e) => setColor(e.target.value.replace("#", ""))} />
                         </Box>
 
                         <Flex direction="column" gap={3}>
@@ -150,7 +150,7 @@ export default function RuleModal({ onClose, isOpen, doc, guild }) {
                                                 setButtons(NEW)
                                             }
                                         } else if (buttons.length - 1 == index && buttons.length < 20) {
-                                            setButtons([...NEW, defaultRule()])
+                                            setButtons([...NEW, defaultButton()])
                                         }
                                     }} />
                                 </Flex>

@@ -1,116 +1,114 @@
 import type { NextApiRequest, NextApiResponse } from "next"
-import NextAuth from "next-auth"
-import Providers from "next-auth/providers"
+import NextAuth, { NextAuthOptions } from "next-auth"
+import DiscordProvider from "next-auth/providers/discord"
 import Cache from "../../../lib/Cache"
-import Config from "../../../config.json"
+import config from "../../../lib/config"
 
-const formUser = async (token) => {
+/** Discord MANAGE_GUILD permission bit (1 << 5). */
+const MANAGE_GUILD = BigInt(0x20)
+
+export interface DiscordGuild {
+    id: string
+    name: string
+    icon: string | null
+    owner: boolean
+    permissions: string
+}
+
+async function fetchDiscord(path: string, token: string) {
+    const response = await fetch(`https://discord.com/api${path}`, {
+        headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!response.ok) return null
+    return response.json()
+}
+
+/** The Discord user object, cached for a minute. */
+const formUser = async (token: string) => {
     const userCache = new Cache("userCache", 1)
-    const cachedData = await userCache.retrieve({
-        _id: token
-    })
+    const cached = await userCache.retrieve({ _id: token })
+    if (cached.user) return cached.user
 
-    if (cachedData.user) return cachedData.user
-
-    const response = await fetch('https://discord.com/api/users/@me', {
-        headers: {
-            Authorization: `Bearer ${token}`
-        }
-    })
-
-    const data = await response.json()
-
-    if (!("id" in data)) {
-        return (await userCache.retrieve({_id:token})) || {}
+    const data = await fetchDiscord("/users/@me", token)
+    if (!data || !("id" in data)) {
+        const stale = await userCache.retrieve({ _id: token }, true)
+        return stale.user || {}
     }
 
-    await userCache.update({
-        _id: token
-    }, {
-        user: data
-    })
-
+    await userCache.update({ _id: token }, { user: data })
     return data
 }
 
-const formGuilds = async (token) => {
+/** The user's guilds, cached for a minute. */
+const formGuilds = async (token: string): Promise<DiscordGuild[]> => {
     const userCache = new Cache("userCache", 1)
-    const cachedData = await userCache.retrieve({
-        _id: token
-    })
+    const cached = await userCache.retrieve({ _id: token })
+    if (cached.guilds) return cached.guilds
 
-    if (cachedData.guilds) return cachedData.guilds
-
-    const response = await fetch('https://discord.com/api/users/@me/guilds', {
-        headers: {
-            Authorization: `Bearer ${token}`
-        }
-    })
-
-    const data = await response.json()
-
-    if (!data[0]) {
-        return (await userCache.retrieve({ _id: token }, true)) || []
+    const data = await fetchDiscord("/users/@me/guilds", token)
+    if (!Array.isArray(data)) {
+        const stale = await userCache.retrieve({ _id: token }, true)
+        return stale.guilds || []
     }
 
-    await userCache.update({
-        _id: token
-    }, {
-        guilds: data
-    })
-
+    await userCache.update({ _id: token }, { guilds: data })
     return data
 }
 
-export default async function auth(req: NextApiRequest, res: NextApiResponse) {
+export const authOptions: NextAuthOptions = {
+    secret: config.nextAuthSecret,
+    providers: [
+        DiscordProvider({
+            clientId: config.clientId,
+            clientSecret: config.clientSecret,
+            authorization: { params: { scope: "identify guilds" } },
+        }),
+    ],
+    pages: {
+        signIn: "/login",
+    },
+    session: {
+        strategy: "jwt",
+        maxAge: 30 * 24 * 60 * 60,
+    },
+    callbacks: {
+        async jwt({ token, account }) {
+            // On initial sign-in `account` is present; stash the access token.
+            if (account) {
+                token.accessToken = account.access_token
+                token.accessTokenExpires = account.expires_at
+                    ? account.expires_at * 1000
+                    : Date.now() + 7 * 24 * 60 * 60 * 1000
+            }
+            return token
+        },
+        async session({ session, token }) {
+            const accessToken = token.accessToken as string | undefined
+            session.accessToken = accessToken
 
-    return await NextAuth(req, res, {
-        providers: [
-            Providers.Discord({
-                ...Config,
-                scope: "identify guilds"
-            })
-        ],
-        pages: {
-            signIn: "/login"
-        },
-        jwt: {
-            encryption: true,
-            secret: 'd905dccfd07d4ad1c99696cf7e8bace094e3a7f16fe43cc2d4a3a11564c161db'
-        },
-        session: {
-            maxAge: 30 * 24 * 60 * 60,
-            jwt: true
-        },
-        callbacks: {
-            async jwt(token, user, account) {
-                const NOW = new Date()
-                if (account && user) {
-                    return {
-                        accessToken: account.accessToken,
-                        accessTokenExpires: NOW.getTime() + account.expires_in * 1000,
-                        refreshToken: account.refresh_token,
-                        user
-                    };
+            if (accessToken) {
+                const data = await formUser(accessToken)
+                session.data = data
+                // Keep next-auth's default `user` populated from the profile.
+                session.user = {
+                    name: data.global_name || data.username,
+                    image: data.avatar
+                        ? `https://cdn.discordapp.com/avatars/${data.id}/${data.avatar}.png`
+                        : null,
+                    ...session.user,
                 }
 
-                if (NOW < token.accessTokenExpires) {
-                    return token;
-                }
-            },
-            async session(session, token) {
-                if (token) {
-                    session.user = token.user
-                    session.accessToken = token.accessToken
-                    session.error = token.error
-                    session.data = await formUser(token.accessToken)
-                    const guilds = await formGuilds(token.accessToken)
+                const guilds = await formGuilds(accessToken)
+                session.guilds = guilds
+                    .filter((guild) => guild.owner || (BigInt(guild.permissions) & MANAGE_GUILD) > 0n)
+                    .sort((a, b) => a.name.localeCompare(b.name))
+            }
 
-                    session.guilds = guilds.filter(guild => (guild.permissions & 0x20) > 0).sort((a, b) => a.name.charCodeAt() - b.name.charCodeAt())
-                }
-
-                return session;
-            },
+            return session
         },
-    })
+    },
+}
+
+export default function auth(req: NextApiRequest, res: NextApiResponse) {
+    return NextAuth(req, res, authOptions)
 }
